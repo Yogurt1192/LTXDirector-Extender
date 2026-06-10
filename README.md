@@ -182,6 +182,3 @@ The fixes in this fork were aimed at LTX Director extension workflows with:
 - `README.md`
 - `PUBLISHING_TO_GITHUB.md`
 
-## Publishing
-
-See [PUBLISHING_TO_GITHUB.md](PUBLISHING_TO_GITHUB.md) for the step-by-step fork and push process for this repo.
