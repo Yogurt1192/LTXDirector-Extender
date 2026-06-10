@@ -56,9 +56,12 @@ This matters for extension passes where video and audio conditioning must align 
 
 ## Yogurt LTXDirector_Extender Workflow
 
-Workflow file:
+Workflow files:
 
-- `example_workflows/Yogurt_LTXDirector_extender.app.json`
+- `example_workflows/Yogurt_LTXDirector_extender_v1.1.json`
+- `plain_graphs/Yogurt_LTXDirector_extender_v1.1.json`
+
+Use `plain_graphs/Yogurt_LTXDirector_extender_v1.1.json` when you want to import a normal graph file directly. Files under `example_workflows/` are exposed through ComfyUI's workflow template system.
 
 ![Yogurt LTXDirector Extender Workflow](images/Yogurt_LTXDirector_Extender_Workflow.png)
 
@@ -170,7 +173,7 @@ The fixes in this fork were aimed at LTX Director extension workflows with:
 ## Known Limitations
 
 - PromptRelay Temporal LoRA is present here as a separate standalone node, but it is still an untested integration path for LTX Director extension workflows.
-- The main shared workflow is `example_workflows/Yogurt_LTXDirector_extender.app.json`, but users still need to set manual durations carefully.
+- The template copy is `example_workflows/Yogurt_LTXDirector_extender_v1.1.json`, and the plain graph import copy is `plain_graphs/Yogurt_LTXDirector_extender_v1.1.json`. Users still need to set manual durations carefully.
 - Extended audio can still produce speech-like output with imperfect lexical accuracy on some prompts. The overlap timing fixes help alignment, but they do not guarantee perfect spoken word fidelity.
 
 ## Files To Review First
@@ -178,5 +181,6 @@ The fixes in this fork were aimed at LTX Director extension workflows with:
 - `ltx_director_guide.py`
 - `prompt_relay.py`
 - `prompt_relay_lora.py`
-- `example_workflows/Yogurt_LTXDirector_extender.app.json`
+- `example_workflows/Yogurt_LTXDirector_extender_v1.1.json`
+- `plain_graphs/Yogurt_LTXDirector_extender_v1.1.json`
 - `README.md`
