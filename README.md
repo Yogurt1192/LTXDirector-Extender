@@ -180,5 +180,3 @@ The fixes in this fork were aimed at LTX Director extension workflows with:
 - `prompt_relay_lora.py`
 - `example_workflows/Yogurt_LTXDirector_extender.app.json`
 - `README.md`
-- `PUBLISHING_TO_GITHUB.md`
-
