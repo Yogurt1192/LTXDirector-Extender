@@ -1,0 +1,6 @@
+.github/
+__pycache__/
+*.pyc
+*.pyo
+.gitattributes
+PUBLISHING_TO_GITHUB.md

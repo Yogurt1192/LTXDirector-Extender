@@ -5,14 +5,16 @@ import torch
 log = logging.getLogger(__name__)
 
 
-def build_temporal_cost(q_token_idx, Lq, Lk, device, dtype, tokens_per_frame):
+def build_temporal_cost(q_token_idx, Lq, Lk, device, dtype, tokens_per_frame, frame_offset=0):
     """Gaussian penalty matrix [Lq, Lk] for video cross-attention (integer frame indexing)."""
     offset = torch.zeros(Lq, Lk, device=device, dtype=dtype)
-    query_frames = torch.arange(Lq, device=device, dtype=torch.long) // tokens_per_frame
+    query_frames = torch.arange(Lq, device=device, dtype=torch.float32) / tokens_per_frame
+    if frame_offset > 0:
+        query_frames = query_frames - frame_offset
 
     for seg in q_token_idx:
         local = seg["local_token_idx"].to(device=device)
-        d = (query_frames.float()[:, None] - seg["midpoint"]).abs()
+        d = (query_frames[:, None] - seg["midpoint"]).abs()
         strength = seg.get("strength", 1.0)
         cost = strength * (torch.relu(d - seg["window"]) ** 2) / (2 * seg["sigma"] ** 2)
         offset[:, local] = cost.to(offset.dtype)
@@ -20,10 +22,12 @@ def build_temporal_cost(q_token_idx, Lq, Lk, device, dtype, tokens_per_frame):
     return offset
 
 
-def build_temporal_cost_scaled(q_token_idx, Lq, Lk, device, dtype, latent_frames):
+def build_temporal_cost_scaled(q_token_idx, Lq, Lk, device, dtype, latent_frames, frame_offset=0):
     """Penalty matrix for queries that don't map to integer frames (e.g. LTXAV audio tokens)."""
     offset = torch.zeros(Lq, Lk, device=device, dtype=dtype)
     query_frames = torch.arange(Lq, device=device, dtype=torch.float32) * latent_frames / Lq
+    if frame_offset > 0:
+        query_frames = query_frames - frame_offset
 
     for seg in q_token_idx:
         local = seg["local_token_idx"].to(device=device)
@@ -38,11 +42,19 @@ def build_temporal_cost_scaled(q_token_idx, Lq, Lk, device, dtype, latent_frames
 
 
 def create_mask_fn(q_token_idx, fallback_tokens_per_frame, latent_frames):
-    """Closure: mask_fn(q, k, transformer_options) -> additive mask or None."""
+    """Closure: mask_fn(q, k, transformer_options) -> additive mask or None.
+
+    If the runtime latent is longer than the latent used to build the schedule,
+    treat the extra leading frames as overlap/reference context and shift the
+    local prompt timing forward onto the newly generated region.
+    """
     cache = {}
     max_token_idx = max(int(seg["local_token_idx"].max().item()) for seg in q_token_idx) + 1
+    configured_latent_frames = latent_frames
+    runtime_latent_frames_hint = configured_latent_frames
 
     def mask_fn(q, k, transformer_options):
+        nonlocal runtime_latent_frames_hint
         Lq, Lk = q.shape[1], k.shape[1]
 
         if Lq == Lk:
@@ -54,21 +66,45 @@ def create_mask_fn(q_token_idx, fallback_tokens_per_frame, latent_frames):
             return None
 
         grid_sizes = transformer_options.get("grid_sizes", None)
-        video_tpf = int(grid_sizes[1]) * int(grid_sizes[2]) if grid_sizes is not None else fallback_tokens_per_frame
-        video_lq = latent_frames * video_tpf
+        if grid_sizes is not None:
+            runtime_latent_frames = int(grid_sizes[0])
+            video_tpf = int(grid_sizes[1]) * int(grid_sizes[2])
+        else:
+            video_tpf = fallback_tokens_per_frame
+            # Reuse the last video latent length for scaled/audio attention so the
+            # audio path sees the same overlap-adjusted schedule as the video path.
+            runtime_latent_frames = runtime_latent_frames_hint
+            if video_tpf > 0 and Lq % video_tpf == 0:
+                runtime_latent_frames = Lq // video_tpf
+
+        runtime_video_lq = runtime_latent_frames * video_tpf
+        # Extension passes prepend overlap/reference frames at runtime; subtract
+        # that prefix so local prompts stay aligned to the newly generated region.
+        frame_offset = max(runtime_latent_frames - configured_latent_frames, 0)
 
         # Skip cross-modal attention — text keys are padded to a fixed length ≥ max_token_idx and != video_lq
-        if Lk == video_lq or Lk < max_token_idx:
+        if Lk == runtime_video_lq or Lk < max_token_idx:
             return None
 
-        mode = "video" if Lq == video_lq else "scaled"
+        mode = "video" if Lq == runtime_video_lq else "scaled"
+        if mode == "video":
+            runtime_latent_frames_hint = runtime_latent_frames
 
-        key = (Lq, Lk, mode, q.device)
+        key = (Lq, Lk, mode, q.device, runtime_latent_frames, frame_offset)
         if key not in cache:
             if mode == "video":
-                cost = build_temporal_cost(q_token_idx, Lq, Lk, q.device, q.dtype, video_tpf)
+                cost = build_temporal_cost(
+                    q_token_idx, Lq, Lk, q.device, q.dtype, video_tpf, frame_offset=frame_offset,
+                )
             else:
-                cost = build_temporal_cost_scaled(q_token_idx, Lq, Lk, q.device, q.dtype, latent_frames)
+                cost = build_temporal_cost_scaled(
+                    q_token_idx, Lq, Lk, q.device, q.dtype, runtime_latent_frames, frame_offset=frame_offset,
+                )
+            if frame_offset > 0:
+                log.info(
+                    "[PromptRelay] Applying overlap offset: configured=%d runtime=%d offset=%d",
+                    configured_latent_frames, runtime_latent_frames, frame_offset,
+                )
             log.info(
                 "[PromptRelay] Built penalty matrix (%s): Lq=%d, Lk=%d, nonzero=%d/%d",
                 mode, Lq, Lk, (cost > 0).sum().item(), cost.numel(),

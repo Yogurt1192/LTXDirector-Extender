@@ -1,226 +1,187 @@
-# Overview
+# Yogurt LTXDirector_Extender
 
-This will be a collection of free resources for ComfyUI.
+Fork of [WhatDreamsCost-ComfyUI](https://github.com/WhatDreamsCost/WhatDreamsCost-ComfyUI) focused on LTX Director extension workflows.
 
-Hopefully it will make creating cool stuff easier.
+This fork keeps the original node set as its base, and now also includes a separate standalone Prompt Relay + Temporal LoRA node. The tested release focus is still the LTX Director extension fixes; the Temporal LoRA node is included as a separate opt-in path and is not yet validated as part of the LTX Director extension flow.
 
-All of my nodes are created with the help of AI, so there may or may not be redundant, messy code.
+The main shareable surface here is the **Yogurt LTXDirector_Extender** node and workflow.
 
-## ▶️ YouTube Tutorial Videos
+## Credits
 
-<table>
-  <tr>
-    <td>
-      <p align="center">Overview Video</p>
-      <a href="https://www.youtube.com/watch?v=aXDIr8eNovI">
-        <img src="https://img.youtube.com/vi/aXDIr8eNovI/0.jpg" alt="Overview Video" width="400">
-      </a>
-    </td>
-    <td>
-      <p align="center">Prompting and Keyframing Guide</p>
-      <a href="https://www.youtube.com/watch?v=ZY4hsvTzbas">
-        <img src="https://img.youtube.com/vi/ZY4hsvTzbas/0.jpg" alt="Prompting and Keyframing Guide" width="400">
-      </a>
-    </td>
-  </tr>
-</table>
+- **Original repo and node pack:** [WhatDreamsCost/WhatDreamsCost-ComfyUI](https://github.com/WhatDreamsCost/WhatDreamsCost-ComfyUI) by WhatDreamsCost
+- **PromptRelay concept:** [Prompt-Relay](https://gordonchen19.github.io/Prompt-Relay/) by Gordon Chen
+- **ComfyUI PromptRelay implementation reference:** [kijai/ComfyUI-PromptRelay](https://github.com/kijai/ComfyUI-PromptRelay)
 
-## ❓ How to install nodes
+## Scope Of This Fork
 
-- Navigate to your `/ComfyUI/custom_nodes/ folder`
-- Run `git clone https://github.com/WhatDreamscost/WhatDreamsCost-ComfyUI`
-- Or download through the ComfyUI Manager.
+This fork is intended to share the LTX Director extension fixes that were validated in a real LTX 2.3 AV extension workflow.
 
-# 🔄 Recent Updates
+Included in this fork:
 
-**v1.3.2**
-  * **LTX Director Hotfix**
-    - Fixed epsilon input overlapping custom_width input
-    - Fixed invisible widgets in nodes 2.0 when toggling widget visibility through settings menu
+- LTX Director extension-specific guide fix for `guide pre_filter_counts != keyframe grid mask length`
+- Overlap-aware guide frame placement for extension latents with preserved reference frames at the front
+- Overlap-aware PromptRelay timing shift for LTX Director extension passes, including the scaled audio attention path
+- Standalone `PromptRelayEncodeWithTemporalLora` node in `prompt_relay_lora.py`
+- Inline code comments at the exact decision points that explain why those extension fixes exist
 
-If anyone find anymore bugs or has idea for improvements please let me know! 
+Not bundled here yet:
 
+- Any merged LTX Director + Temporal LoRA workflow path
+- Shared workflows for this release
 
-**v1.3.1**
-  * **LTX Director Example Workflow Fix**
-    - Minor fix to the example workflow (i forgot to set the clip loader type to ltxv lol)
-    
- **v1.3.0**
-  * **New nodes: LTX Director and LTX Director Guide**
-    - A complete timeline editor that can do almost everything. It's my most ambitious node so far and the successor to LTX Sequencer/Multi Image Loader.
+The Temporal LoRA work remains a separate PromptRelay-style node and has **not** been validated in combination with the LTX Director extension path yet. Until that combined path is tested, it should stay separate.
 
- **v1.2.9**
-  * **Fixed every known issue with Multi Image Loader and added text output to Speech Length Calculator**
-  
-    - Removed the completely useless drag and drop animations (now it's snappy and no longer finicky)
-    - Fixed the node resizing on nodes 2.0 
-    - Updated grid logic to fit images better
-    - Added ablity to right click images to copy/open/save images
-    - Fixed the "invisible hitbox" underneath node issue (actually this time).
+## What Changed
 
-  Also added a text output to the Speech Length Calculator node (can't believe i didn't do this initially)
+### 1. Guide attention accounting fix
 
-<details>
-  <summary>Click to view older Updates</summary>
+The LTX Director guide node now appends the guide attention metadata that ComfyUI expects for each inserted guide latent. This resolves the failure:
 
- **v1.2.8**
-  * **Updated Load Video UI and Color Conversion**
-    * Added crop mode, a simple interface to crop videos. It also include various aspect ratio presets.
-    * Updated color conversion to ensure colors are as accurate as possible. Will first check metadata for colorspace, and if metadata is missing then it will guess the colorspace based on video dimensions.
-    * Updated display mode toggle UI to be more understandable 
+`ValueError: guide pre_filter_counts != keyframe grid mask length`
 
- **v1.2.7**
-  * **New Node: Load Video UI**
+### 2. Overlap-aware guide timing
 
-Custom Node to Trim, Resize, and Preview Videos in Realtime
-  
-   **v1.2.6**
-  * **Updated Speech Length Calculator UI**
+Extension latents can start with preserved overlap/reference frames from the previous generation pass. The timeline guide positions are extension-relative, so the guide node now detects that front prefix and shifts guide insert positions forward into the newly generated region.
 
-Also added duration output to the Load Audio UI node
+### 3. Overlap-aware PromptRelay timing
 
- **v1.2.5**
-  * **Updated Load Audio UI Node**
-    * Added Duration Setting
-    * Made the whole selection bar draggable
-    * Fixed Trimmed UI to show centiseconds
-    
- **v1.2.4**
- * **New Node: Load Audio UI**
+The PromptRelay timing logic now detects when the runtime latent is longer than the schedule-configured latent. When that happens, it treats the extra leading frames as overlap/reference context and shifts the local prompt schedule forward.
 
-Overhaul of the load audio node. Features a simple interface to easily trim audio. Also allows dragging and dropping files (fixes the original node that doesn't allow dropping in videos). Also compatible with nodes 2.0.
+That shift is applied to:
 
- **v1.2.3**
-  * **Workflow Update + Minor Bug Fix** 
-    * Added new workflow that is compatible with the latest ComfyUI version (as of 4/27/26). The new workflow also included an option to include custom audio, and has minor improvements of the previous workflows.
-    * Fixed minor bug with Multi Image Loader that blocked mouse input in a small area under the node 🤷‍♂️
+- the normal video cross-attention path
+- the scaled attention path used by LTX audio conditioning
 
-**v1.2.0**
-  * **New Node: Speech Length Calculator** 
-  
-  Automatically output in realtime how long a video should be based on the dialouge. 
+This matters for extension passes where video and audio conditioning must align to the new section instead of the preserved overlap prefix.
 
-**v1.1.0**
-  * Added resize_method to the Multi Image Loader node for more resize options
-  * Added insert_mode which allows you to enter in seconds instead of frames on the LTX Sequencer node
-  * Updated workflows with more notes
-  * Re-added tiny vae to workflows
-  * Fixed various bugs
-  * more things i can't rememeber
-  
-**This update will change the node layouts, so be sure to update your workflows or else they won't work properly.**
+## Yogurt LTXDirector_Extender Workflow
 
-❗❗❗ **New Tutorial on using these nodes available: https://www.youtube.com/watch?v=aXDIr8eNovI**  ❗❗❗
-</details>
+Workflow file:
 
-# ⚙️ Custom Nodes
+- `example_workflows/Yogurt_LTXDirector_extender.app.json`
 
+![Yogurt LTXDirector Extender Workflow](images/Yogurt_LTXDirector_Extender_Workflow.png)
 
-## LTX Director
-<img width="1481" height="833" alt="Clipboard Image (2)" src="https://github.com/user-attachments/assets/08f3fe53-9393-4f5d-9de5-58b229fbed47" />
+*The Yogurt LTXDirector_Extender workflow: generate the first clip with the standard LTX Director path, then continue with the extender path using prior video and audio context.*
 
-A Complete Timeline Editor For LTX 2.3. This is the sucessor of my previous nodes, and has loads of features in it. It was originally based off of [Kijai's Prompt Relay node](https://github.com/kijai/ComfyUI-PromptRelay) and my LTX Sequencer/Multi Image Loader nodes.
+Primary nodes in this fork:
 
-**Main Features:**
-- **Fully Functional Timeline Editor:** I spent hours studying various video editors and ended up with this design. If anyone has ideas for improvements let me know! I will adding documentation on all the functions soon.
-- **Prompt Relay integrated:** This unlocks the ability to have granular control over video generation. For more information on Prompt Relay go here, https://gordonchen19.github.io/Prompt-Relay/
-- **First, Middle, Last Frame Support:** This has by far the easiest method of creating first/last frames videos. It supports any number of keyframes, and will be the successor of my previous nodes.
-- **Custom Audio Support:** Import, trim, and combine your own audio clips in this node. Enabling custom audio is as simple as clicking 1 button. It is also compatible with every other feature in the node, include first/last frames, t2v, i2v, and prompt relay.
-- **Image to Video:** Part of the goal of this node was to make it easier to do everything, including Image to Video. It has built in resize functionality, and of course all the benifits of the prompt relay and custom audio integration.
-- **Text to Video:** Use text segments to create T2V videos. Compatible with all other features of the node.
+- `LTX Director Extender`
+- `LTX Director Guide Extender`
+- `LTX Prompt Relay Encode + Temporal LoRA`
 
-Download workflows here: https://github.com/WhatDreamsCost/WhatDreamsCost-ComfyUI/tree/main/example_workflows
+![Yogurt Prompt Relay LoRA Node](images/Yogurt_PromptRelay_Lora_Node.png)
 
-**Tutorial videos and documentation coming soon**
+*The standalone LTX Prompt Relay Encode + Temporal LoRA node included in this fork. This is kept separate from the tested LTX Director extension path until the combined workflow is validated.*
 
+### What The Workflow Does
 
-## Multi Image Loader
-<img width="1280" height="720" alt="Multi_Image_Loader_Wide_Gif" src="https://github.com/user-attachments/assets/99b6afd8-5197-4e6c-81da-a7bd156c42c7" />
+The intended flow is:
 
-An Image loader that features a built in gallery, allowing your to easily rearrange images and output them seperately or batched together. It also combines the image resize node and LTXVPreprocess node to reduce clutter in LTX workflows.
+1. Generate the first clip with the standard **LTX Director** node.
+2. Use the **Yogurt LTXDirector_Extender** flow to append new segments.
+3. Feed the extender sampler subgraph with the previous clip's video and audio context so the next section continues from what was already generated.
 
-## LTX Sequencer
-![LTX_Sequencer_GIF](https://github.com/user-attachments/assets/88f27155-f50e-4cb2-b937-ab173e6bdf0b)
+This lets the user keep extending a sequence while preserving context from the earlier result instead of treating each segment as a fresh standalone generation.
 
-An overhaul of the LTXVAddGuideMulti node. It allows you to quickly create FFLF (First Frame Last Frame) videos, shot sequences, supports any number of middle frames.
+### Cut vs Blend In The Sampler Subgraph
 
-Connect the Multi Image Loader node's multi_output to automatically update the node's widgets.
+Inside the sampler subgraph, there is a choice between cutting frames or blending them depending on the effect you want.
 
-It also has a sync feature that syncs all LTX Sequencer nodes together in realtime, removing the need to edit every single node manually every time you want to make a change to something. 
+- Use **cut** when you want a harder transition.
+- Use **blend** when you want a softer overlap transition.
 
+If you swap this behavior, change the output connector from **cut** to **blend** on that node and reconnect it to the following node in the subgraph.
 
-## LTX Keyframer
-<img width="1082" height="608" alt="LTX Keyframer Wide" src="https://github.com/user-attachments/assets/850ba4a2-dbca-4e5a-a580-1c271e9f0c41" />
+### Duration Must Match Manually
 
-An overhaul of the LTXVImgToVideoInplaceKJ node. It allows you to quickly create FFLF (First Frame Last Frame) videos and shot sequences. Also upports any number of middle frames.
+The duration configured in **LTX Director Extender** must match the duration configured inside the sampler subgraph.
 
-Connect the Multi Image Loader node's multi_output to automatically update the node's widgets.
+This is manual for now. A `GetNode` attempt was not reliable enough in this workflow, so both places should be set by hand until that is improved.
 
-It also has a sync feature that syncs all LTX Keyframer nodes together in realtime, removing the need to edit every single node manually every time you want to make a change to something. 
+If those durations do not match, the extension path can drift away from the intended overlap and continuation timing.
 
-**I would recommend using the LTX Sequencer Node over this node, after further testing it seems superior in at pretty much everything. I'll leave it in just in case more people want to test it**
+### Extending From A Previously Created Video
 
-## Speech Length Calculator
-<img width="1280" height="720" alt="Speech Length Calculator v2 Gif" src="https://github.com/user-attachments/assets/04b9a1cf-20e4-4b7b-a9c6-4a5a0825995b" />
-<br>
-<br>
-This node calculates in realtime how long a video should be based on the dialogue. Any words in quotations will be considered as speech. The node updates in realtime without having to run the workflow, and outputs the length depending on how fast the speech is.
+If you want to extend from a video that already exists:
 
-If you connect another string/text node to the text_input, it will still update in the length in realtime.
+1. Use a **Load Video** node to bring the previous clip into the workflow.
+2. Disable the standard **LTX Director** generation path for the initial clip.
+3. Connect the loaded video's frame output and audio output into the extender sampler subgraph.
 
-I kept having to play the guessing game on my own generations so I made this node to make it easier :man_shrugging:
+That lets the extender path continue from an already rendered clip instead of requiring the first section to be regenerated inside the same workflow.
 
-## Load Video UI  
-<table width="100%">
-  <tr>
-    <td width="50%" align="center">
-      <p>Simple Controls</p>
-      <img src="https://github.com/user-attachments/assets/fb76ff03-a6ff-4837-bd63-7e429f5f3d37" width="100%" />
-    </td>
-    <td width="50%" align="center">
-      <p>New Crop Mode!</p>
-      <img src="https://github.com/user-attachments/assets/28cfb4ca-e42a-44da-9afb-f20cb01b9722" width="100%" />
-    </td>
-  </tr>
-</table>
+### Practical Runtime Notes
 
-<br>
-<br>
-An upgraded Load Video node. It has the following features:
+Tested results so far:
 
-* Simple interface to quickly trim videos and preview them in realtime.
-* Ability to load any length of video into the node (the default load video node was limited to 100MB files)
-* Easily switch between showing seconds and frames with a toggle button. This will change the widgets as well as the interface.
-* Multiple options for resizing the video (maintain aspect ratio, crop, stretch to fit, pad)
-* Allows dragging and dropping files into the node
-* Progress bar
-* Optimized to use less RAM (still very limited due to ComfyUI limitations, but at least a little more efficient)
+- Up to about **150 seconds** of generation on **16 GB VRAM**
+- Occasional **64 GB system RAM** exhaustion on the final step for very long runs
+- **10 to 15 second** extension durations tend to work consistently
 
-Please note that due to ComfyUI limitations (and the fact that this node doesn't use any addtional libraries), this node will not work well for outputting large videos. You can trim any length of video without a problem, but if the output is still large it will end up using a lot of RAM. I have implemented various optimizations though to make it use less memory.
+For stability, shorter extension chunks are the safer default. Long chained runs are possible, but they are more likely to hit RAM limits near the end.
 
-## Load Audio UI  
-<img width="1280" height="720" alt="Load_Audio_UI_V2" src="https://github.com/user-attachments/assets/e3dc5c8d-d0b9-4336-8196-944204719239" />
-<br>
-<br>
-An upgraded Load Audio node. Features a simple interface to easily trim audio. Also allows dragging and dropping files (fixes the original node that doesn't allow dropping in videos). Also compatible with nodes 2.0.
+### UI Note
 
-# 💡 Workflows
-<img width="3120" height="990" alt="LTX I2V First Last Frame 3 Stage Workflow v6" src="https://github.com/user-attachments/assets/c993ef2f-ac4b-4091-a7f6-5ff1674c3718" />
-<br>
-<br>
-This is a compact LTX 2.3 workflow for I2V and First Frame, Middle Frame, Last frame video generation.
-I seperated and organized everything into subraphs to make things as clean as possible, and added toggles to customize the workflow quickly.
+The extender workflow is intended to use the renamed fork-specific nodes:
 
-Download workflows here: https://github.com/WhatDreamsCost/WhatDreamsCost-ComfyUI/tree/main/example_workflows
+- `LTX Director Extender`
+- `LTX Director Guide Extender`
+- `LTX Prompt Relay Encode + Temporal LoRA`
 
-Or drag and drop the image into ComfyUI to import workflow.
+If a workflow still references the original `LTXDirector` or `LTXDirectorGuide` node types, it will bind to the upstream WhatDreamsCost nodes instead of the forked extender versions.
 
-# ❗ Known Issues
+## Important Packaging Decision
 
-Fixed everything so far. If there are any other issue or bugs you find please let me know!
+This fork deliberately does **not** merge the separate PromptRelay Temporal LoRA update into LTX Director yet.
 
-# 💡 Additional Info
+Reason:
 
-I made these nodes knowing almost nothing about python and a beginner level knowledge of javascript. Feel free to suggest improvements, and if you run into any bugs let me know.
+- the Temporal LoRA update was developed separately
+- the combined LTX Director extension + Temporal LoRA path has not been tested
+- shipping them together would make it harder to know whether a regression comes from the LTX extension timing fixes or the LoRA scheduling layer
 
-For those asking, I mainly used gemini to create these nodes.
+Instead, this repo now exposes that work as a separate standalone node in `prompt_relay_lora.py`. The clean next step is to test that node against this LTX Director fork before merging any combined workflow support.
+
+## Install
+
+1. Clone this repo into your ComfyUI `custom_nodes` folder.
+2. Restart ComfyUI.
+3. Re-open your LTX Director extension workflow and reconnect any nodes if your local workflow still points at an older custom-node install.
+
+Example:
+
+```bash
+cd /path/to/ComfyUI/custom_nodes
+git clone https://github.com/Yogurt1192/LTXDirector-Extender.git
+```
+
+The included workflow is designed for the extender node names in this fork. If you install both the upstream repo and this fork side by side, use the extender-named nodes when building or updating workflows.
+
+## Tested Focus
+
+The fixes in this fork were aimed at LTX Director extension workflows with:
+
+- overlap-prefixed extension latents
+- timeline image guides
+- PromptRelay local prompt scheduling
+- audio/video extension passes in the LTX AV path
+
+## Known Limitations
+
+- PromptRelay Temporal LoRA is present here as a separate standalone node, but it is still an untested integration path for LTX Director extension workflows.
+- The main shared workflow is `example_workflows/Yogurt_LTXDirector_extender.app.json`, but users still need to set manual durations carefully.
+- Extended audio can still produce speech-like output with imperfect lexical accuracy on some prompts. The overlap timing fixes help alignment, but they do not guarantee perfect spoken word fidelity.
+
+## Files To Review First
+
+- `ltx_director_guide.py`
+- `prompt_relay.py`
+- `prompt_relay_lora.py`
+- `example_workflows/Yogurt_LTXDirector_extender.app.json`
+- `README.md`
+- `PUBLISHING_TO_GITHUB.md`
+
+## Publishing
+
+See [PUBLISHING_TO_GITHUB.md](PUBLISHING_TO_GITHUB.md) for the step-by-step fork and push process for this repo.

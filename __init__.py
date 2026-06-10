@@ -6,6 +6,7 @@ from .load_audio_ui import LoadAudioUI
 from .load_video_ui import LoadVideoUI
 from .ltx_director import LTXDirector
 from .ltx_director_guide import LTXDirectorGuide
+from .prompt_relay_lora import LTXPromptRelayEncodeWithTemporalLora
 from comfy_api.latest import ComfyExtension, io
 from typing_extensions import override
 
@@ -14,7 +15,8 @@ class PromptRelay(ComfyExtension):
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
         return [
             LTXDirector,
-            LTXDirectorGuide
+            LTXDirectorGuide,
+            LTXPromptRelayEncodeWithTemporalLora,
         ]
 
 async def comfy_entrypoint() -> PromptRelay:
@@ -27,8 +29,9 @@ NODE_CLASS_MAPPINGS = {
     "SpeechLengthCalculator": SpeechLengthCalculator,
     "LoadAudioUI": LoadAudioUI,
     "LoadVideoUI": LoadVideoUI,
-    "LTXDirector": LTXDirector,
-    "LTXDirectorGuide": LTXDirectorGuide,
+    "LTXDirectorExtender": LTXDirector,
+    "LTXDirectorGuideExtender": LTXDirectorGuide,
+    "LTXPromptRelayEncodeWithTemporalLora": LTXPromptRelayEncodeWithTemporalLora,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -38,8 +41,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "SpeechLengthCalculator": "Speech Length Calculator",
     "LoadAudioUI": "Load Audio UI",
     "LoadVideoUI": "Load Video UI",
-    "LTXDirector": "LTX Director",
-    "LTXDirectorGuide": "LTX Director Guide",
+    "LTXDirectorExtender": "LTX Director Extender",
+    "LTXDirectorGuideExtender": "LTX Director Guide Extender",
+    "LTXPromptRelayEncodeWithTemporalLora": "LTX Prompt Relay Encode + Temporal LoRA",
 }
 
 WEB_DIRECTORY = "./js"

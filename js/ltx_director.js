@@ -3795,64 +3795,69 @@ const APPENDED_WIDGET_DEFAULTS = [
   ["segment_lengths", ""],
 ];
 
+function initializeExtenderDirectorNode(node) {
+  if (!node || node._timelineEditor || node.widgets?.find(w => w.name === "timeline_ui")) {
+    return;
+  }
+
+  for (const [name, def] of APPENDED_WIDGET_DEFAULTS) {
+    if (!node.widgets?.find(w => w.name === name)) {
+      node.addWidget("string", name, def, () => { });
+    }
+  }
+  for (const w of node.widgets || []) {
+    if (HIDDEN_WIDGET_NAMES.includes(w.name)) hideWidget(w);
+  }
+
+  node.size[0] = 1000;
+
+  const compWidget = node.widgets?.find(w => w.name === "img_compression");
+  if (compWidget && (compWidget.value === undefined || compWidget.value === null || compWidget.value === 0)) {
+    compWidget.value = 18;
+  }
+
+  const globalPromptWidget = node.widgets?.find(w => w.name === "global_prompt");
+  if (globalPromptWidget) {
+    if (!globalPromptWidget.options) globalPromptWidget.options = {};
+    globalPromptWidget.options.hidden = true;
+    globalPromptWidget.hidden = true;
+    globalPromptWidget.computeSize = () => [0, 0];
+    setTimeout(() => {
+      if (globalPromptWidget.element) globalPromptWidget.element.style.display = "none";
+    }, 0);
+  }
+
+  const container = document.createElement("div");
+  const widget = node.addDOMWidget("timeline_ui", "timeline_ui", container, {
+    getValue: () => "",
+    setValue: () => { },
+  });
+
+  widget.computeSize = function (width) {
+    const canvasH = node._timelineEditor ? node._timelineEditor.canvasHeight : CANVAS_HEIGHT;
+    return [width, canvasH + 235];
+  };
+
+  setTimeout(() => {
+    try {
+      if (!node._timelineEditor) {
+        node._timelineEditor = new TimelineEditor(node, container, widget);
+      }
+    } catch (err) {
+      console.error("[PromptRelay] timeline editor init failed:", err);
+    }
+  }, 0);
+}
+
 app.registerExtension({
-  name: "LTXDirector",
+  name: "LTXDirectorExtender",
   async beforeRegisterNodeDef(nodeType, nodeData, app) {
-    if (nodeData.name === "LTXDirector") {
+    if (nodeData.name === "LTXDirectorExtender") {
 
       const onNodeCreated = nodeType.prototype.onNodeCreated;
       nodeType.prototype.onNodeCreated = function () {
         if (onNodeCreated) onNodeCreated.apply(this, arguments);
-
-        for (const [name, def] of APPENDED_WIDGET_DEFAULTS) {
-          if (!this.widgets?.find(w => w.name === name)) {
-            this.addWidget("string", name, def, () => { });
-          }
-        }
-        for (const w of this.widgets) {
-          if (HIDDEN_WIDGET_NAMES.includes(w.name)) hideWidget(w);
-        }
-
-        // Set default width to be wider on creation (approx 2.5x default ~220px)
-        this.size[0] = 1000;
-
-        // Force default for img_compression if not set (ComfyUI sometimes skips optional defaults)
-        const compWidget = this.widgets?.find(w => w.name === "img_compression");
-        if (compWidget && (compWidget.value === undefined || compWidget.value === null || compWidget.value === 0)) {
-          compWidget.value = 18;
-        }
-
-        // Hide global prompt by default on creation without destroying its DOM element
-        const globalPromptWidget = this.widgets?.find(w => w.name === "global_prompt");
-        if (globalPromptWidget) {
-          if (!globalPromptWidget.options) globalPromptWidget.options = {};
-          globalPromptWidget.options.hidden = true;
-          globalPromptWidget.hidden = true;
-          globalPromptWidget.computeSize = () => [0, 0];
-          setTimeout(() => {
-            if (globalPromptWidget.element) globalPromptWidget.element.style.display = "none";
-          }, 0);
-        }
-
-        const container = document.createElement("div");
-        const widget = this.addDOMWidget("timeline_ui", "timeline_ui", container, {
-          getValue: () => "",
-          setValue: () => { },
-        });
-
-        widget.computeSize = function (width) {
-          const canvasH = self._timelineEditor ? self._timelineEditor.canvasHeight : CANVAS_HEIGHT;
-          return [width, canvasH + 235];
-        };
-
-        const self = this;
-        setTimeout(() => {
-          try {
-            self._timelineEditor = new TimelineEditor(self, container, widget);
-          } catch (err) {
-            console.error("[PromptRelay] timeline editor init failed:", err);
-          }
-        }, 0);
+        initializeExtenderDirectorNode(this);
       };
 
       const onRemoved = nodeType.prototype.onRemoved;
@@ -3884,6 +3889,16 @@ app.registerExtension({
         }, 0);
         return out;
       };
+    }
+  },
+  nodeCreated(node) {
+    if (node?.comfyClass === "LTXDirectorExtender") {
+      initializeExtenderDirectorNode(node);
+    }
+  },
+  loadedGraphNode(node) {
+    if (node?.comfyClass === "LTXDirectorExtender") {
+      initializeExtenderDirectorNode(node);
     }
   },
 });

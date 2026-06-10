@@ -1,3 +1,4 @@
+from comfy_extras import nodes_lt
 from comfy_extras.nodes_lt import LTXVAddGuide
 import torch
 import comfy.utils
@@ -5,12 +6,38 @@ from comfy_api.latest import io
 from .ltx_director import GuideData
 
 
+def _get_guide_frame_offset(latent, guide_data, scale_factors):
+    # Extension latents often start with preserved overlap frames; shift timeline
+    # guide inserts past that prefix so guide timing still matches the new region.
+    frame_offset = guide_data.get("frame_offset")
+    if frame_offset is not None:
+        return int(frame_offset)
+
+    noise_mask = latent.get("noise_mask")
+    if noise_mask is None or noise_mask.ndim != 5 or noise_mask.shape[2] == 0:
+        return 0
+
+    frame_values = noise_mask.amax(dim=(0, 1, 3, 4))
+    if frame_values[0] > 0:
+        return 0
+
+    nonzero = torch.nonzero(frame_values > 0, as_tuple=False)
+    if nonzero.numel() == 0:
+        return 0
+
+    first_masked_latent_idx = int(nonzero[0].item())
+    if first_masked_latent_idx <= 0:
+        return 0
+
+    return 1 + (first_masked_latent_idx - 1) * scale_factors[0]
+
+
 class LTXDirectorGuide(LTXVAddGuide):
     @classmethod
     def define_schema(cls):
         return io.Schema(
-            node_id="LTXDirectorGuide",
-            display_name="LTX Director Guide",
+            node_id="LTXDirectorGuideExtender",
+            display_name="LTX Director Guide Extender",
             category="LTXVCustom",
             description=(
                 "Applies guide images from a Prompt Relay Timeline node at the frame positions "
@@ -35,6 +62,7 @@ class LTXDirectorGuide(LTXVAddGuide):
     @classmethod
     def execute(cls, positive, negative, vae, latent, guide_data, scale_by=1.0, upscale_method="bicubic") -> io.NodeOutput:
         scale_factors = vae.downscale_index_formula
+        guide_frame_offset = _get_guide_frame_offset(latent, guide_data, scale_factors)
 
         # Clone latents to avoid mutating upstream nodes
         latent_image = latent["samples"].clone()
@@ -74,6 +102,7 @@ class LTXDirectorGuide(LTXVAddGuide):
 
         for idx, img_tensor in enumerate(images):
             f_idx = insert_frames[idx] if idx < len(insert_frames) else 0
+            f_idx += guide_frame_offset
             strength = strengths[idx] if idx < len(strengths) else 1.0
 
             image_1, t = cls.encode(vae, latent_width, latent_height, img_tensor, scale_factors)
@@ -85,6 +114,14 @@ class LTXDirectorGuide(LTXVAddGuide):
 
             positive, negative, latent_image, noise_mask = cls.append_keyframe(
                 positive, negative, frame_idx, latent_image, noise_mask, t, strength, scale_factors,
+            )
+
+            # Keep guide attention metadata aligned with each inserted keyframe so
+            # ComfyUI's guide mask accounting matches the encoded latent guide shape.
+            pre_filter_count = t.shape[2] * t.shape[3] * t.shape[4]
+            guide_latent_shape = list(t.shape[2:])
+            positive, negative = nodes_lt._append_guide_attention_entry(
+                positive, negative, pre_filter_count, guide_latent_shape, strength=strength,
             )
 
         return io.NodeOutput(positive, negative, {"samples": latent_image, "noise_mask": noise_mask})

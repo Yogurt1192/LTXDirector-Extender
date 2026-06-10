@@ -376,8 +376,8 @@ class LTXDirector(io.ComfyNode):
     @classmethod
     def define_schema(cls):
         return io.Schema(
-            node_id="LTXDirector",
-            display_name="LTX Director",
+            node_id="LTXDirectorExtender",
+            display_name="LTX Director Extender",
             category="conditioning/prompt_relay",
             description=(
                 "Same as Prompt Relay Encode, but local prompts and segment lengths are edited "
@@ -635,7 +635,7 @@ class LTXDirector(io.ComfyNode):
 
 
 NODE_CLASS_MAPPINGS = {
-    "LTXDirector": LTXDirector,
+    "LTXDirectorExtender": LTXDirector,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
