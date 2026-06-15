@@ -5,5 +5,6 @@ __pycache__/
 .gitattributes
 PUBLISHING_TO_GITHUB.md
 LOCAL_NOTES.md
+gcm-diagnose.log
 local_notes/
 *.local.md

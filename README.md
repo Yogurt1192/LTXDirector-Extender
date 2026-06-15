@@ -85,6 +85,8 @@ Workflow files:
 
 Use `example_workflows/Yogurt_LTXDirector_extender_v1.6.app.json` as the current tested template workflow. Files under `example_workflows/` are exposed through ComfyUI's workflow template system.
 
+Before loading the `v1.6` workflow, update the custom node itself from this repo. The workflow depends on the current transition and patch behavior in `__init__.py`, `frame_transition_nodes.py`, and `patches.py`; older installed node files can load the workflow but still miss the seam, overlap, and audio-alignment fixes it expects.
+
 ![Yogurt LTXDirector Extender Workflow](images/Yogurt_LTXDirector_Extender_Workflow.png)
 
 *The Yogurt LTXDirector_Extender workflow: generate the first clip with the standard LTX Director path, then continue with the extender path using prior video and audio context.*
@@ -94,6 +96,8 @@ Primary nodes in this fork:
 - `LTX Director Extender`
 - `LTX Director Guide Extender`
 - `LTX Prompt Relay Encode + Temporal LoRA`
+
+If you already had an older copy of this custom node installed, replace the node files before testing `v1.6` so ComfyUI is using the updated node definitions and runtime patches.
 
 ![Yogurt Prompt Relay LoRA Node](images/Yogurt_PromptRelay_Lora_Node.png)
 
