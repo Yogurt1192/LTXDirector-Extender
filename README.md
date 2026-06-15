@@ -21,6 +21,7 @@ Included in this fork:
 - LTX Director extension-specific guide fix for `guide pre_filter_counts != keyframe grid mask length`
 - Overlap-aware guide frame placement for extension latents with preserved reference frames at the front
 - Overlap-aware PromptRelay timing shift for LTX Director extension passes, including the scaled audio attention path
+- Transition-node fixes for frame/audio seam handling in multi-pass extender workflows
 - Standalone `PromptRelayEncodeWithTemporalLora` node in `prompt_relay_lora.py`
 - Inline code comments at the exact decision points that explain why those extension fixes exist
 
@@ -54,14 +55,37 @@ That shift is applied to:
 
 This matters for extension passes where video and audio conditioning must align to the new section instead of the preserved overlap prefix.
 
+### 4. Transition and seam fixes for the extender path
+
+The extender workflow now includes a validated transition path for continuing rendered clips without the hard one-frame cut that earlier workflow variants could fall into.
+
+The working `v1.6` workflow uses direct embedded-subgraph inputs for overlap and seam controls instead of relying on the older virtual `SetNode`/`GetNode` bridge inside the extender subgraphs.
+
+Specific node updates used by the working path:
+
+- `AlignedOverlapCutTransition` in `frame_transition_nodes.py`
+	- adds automatic seam scoring across the overlap window
+	- exposes `blend_frames` to soften the splice on both sides of the seam
+	- exposes `seam_shift` so the cut can be moved earlier or later inside the overlap region
+	- infers a usable overlap window from the actual frame batches when the workflow resolves the overlap control incorrectly
+	- keeps `IS_CHANGED` forcing recomputation so transition tuning is not hidden by prompt/subgraph caching
+- `AlignedAudioCutTransition` in `frame_transition_nodes.py`
+	- uses the image seam index to keep the audio splice aligned with the chosen visual seam
+- `LTXExtensionFrameLogic` in `frame_transition_nodes.py`
+	- remains the overlap/frame reference utility node used by the extender sampler subgraphs
+	- its outputs are now consumed through the corrected `v1.6` subgraph wiring instead of the broken overlap bus that previously collapsed to a one-frame cut
+
+The `v1.6` workflow is the release workflow to use when you want the smoother transition behavior that was validated during testing.
+
 ## Yogurt LTXDirector_Extender Workflow
 
 Workflow files:
 
+- `example_workflows/Yogurt_LTXDirector_extender_v1.6.app.json`
 - `example_workflows/Yogurt_LTXDirector_extender_v1.1.json`
-- `plain_graphs/Yogurt_LTXDirector_extender_v1.1.json`
+- `plain_graphs/Yogurt_LTXDirector_extender_v1.2.json`
 
-Use `plain_graphs/Yogurt_LTXDirector_extender_v1.1.json` when you want to import a normal graph file directly. Files under `example_workflows/` are exposed through ComfyUI's workflow template system.
+Use `example_workflows/Yogurt_LTXDirector_extender_v1.6.app.json` as the current tested template workflow. Files under `example_workflows/` are exposed through ComfyUI's workflow template system. The `plain_graphs/` copies have not been brought up to the `v1.6` transition wiring yet.
 
 ![Yogurt LTXDirector Extender Workflow](images/Yogurt_LTXDirector_Extender_Workflow.png)
 
@@ -91,10 +115,12 @@ This lets the user keep extending a sequence while preserving context from the e
 
 Inside the sampler subgraph, there is a choice between cutting frames or blending them depending on the effect you want.
 
-- Use **cut** when you want a harder transition.
-- Use **blend** when you want a softer overlap transition.
+- The `v1.6` workflow uses the corrected `AlignedOverlapCutTransition` path as the tested default.
+- Use a lower seam shift when you want the new continuation to take over earlier in the overlap window.
+- Use a higher seam shift when you want to preserve more of the previous clip before handing off.
+- Increase `blend_frames` when you want a softer overlap transition around the selected seam.
 
-If you swap this behavior, change the output connector from **cut** to **blend** on that node and reconnect it to the following node in the subgraph.
+In practice, `seam_shift = 0` lets the seam scorer choose the cut location automatically, and then `blend_frames` controls how soft that handoff feels.
 
 ### Duration Must Match Manually
 
@@ -173,14 +199,15 @@ The fixes in this fork were aimed at LTX Director extension workflows with:
 ## Known Limitations
 
 - PromptRelay Temporal LoRA is present here as a separate standalone node, but it is still an untested integration path for LTX Director extension workflows.
-- The template copy is `example_workflows/Yogurt_LTXDirector_extender_v1.1.json`, and the plain graph import copy is `plain_graphs/Yogurt_LTXDirector_extender_v1.1.json`. Users still need to set manual durations carefully.
+- The current tested template copy is `example_workflows/Yogurt_LTXDirector_extender_v1.6.app.json`. The `plain_graphs/` imports are still older copies and do not yet mirror the final `v1.6` transition wiring.
 - Extended audio can still produce speech-like output with imperfect lexical accuracy on some prompts. The overlap timing fixes help alignment, but they do not guarantee perfect spoken word fidelity.
 
 ## Files To Review First
 
 - `ltx_director_guide.py`
+- `frame_transition_nodes.py`
 - `prompt_relay.py`
 - `prompt_relay_lora.py`
-- `example_workflows/Yogurt_LTXDirector_extender_v1.1.json`
-- `plain_graphs/Yogurt_LTXDirector_extender_v1.1.json`
+- `example_workflows/Yogurt_LTXDirector_extender_v1.6.app.json`
+- `plain_graphs/Yogurt_LTXDirector_extender_v1.2.json`
 - `README.md`

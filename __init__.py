@@ -7,8 +7,16 @@ from .load_video_ui import LoadVideoUI
 from .ltx_director import LTXDirector
 from .ltx_director_guide import LTXDirectorGuide
 from .prompt_relay_lora import LTXPromptRelayEncodeWithTemporalLora
+from .frame_spill_nodes import SpillImageBatchToDirectory
+from .frame_passthrough_nodes import FrameCountPassthrough
+from .frame_transition_nodes import AlignedAudioCutTransition, AlignedOverlapCutTransition, LTXExtensionFrameLogic
+from .patches import apply_audio_encode_safety_patch, apply_audio_trim_safety_patch
 from comfy_api.latest import ComfyExtension, io
 from typing_extensions import override
+
+
+apply_audio_encode_safety_patch()
+apply_audio_trim_safety_patch()
 
 class PromptRelay(ComfyExtension):
     @override
@@ -32,6 +40,11 @@ NODE_CLASS_MAPPINGS = {
     "LTXDirectorExtender": LTXDirector,
     "LTXDirectorGuideExtender": LTXDirectorGuide,
     "LTXPromptRelayEncodeWithTemporalLora": LTXPromptRelayEncodeWithTemporalLora,
+    "SpillImageBatchToDirectory": SpillImageBatchToDirectory,
+    "FrameCountPassthrough": FrameCountPassthrough,
+    "AlignedAudioCutTransition": AlignedAudioCutTransition,
+    "AlignedOverlapCutTransition": AlignedOverlapCutTransition,
+    "LTXExtensionFrameLogic": LTXExtensionFrameLogic,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -44,6 +57,11 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "LTXDirectorExtender": "LTX Director Extender",
     "LTXDirectorGuideExtender": "LTX Director Guide Extender",
     "LTXPromptRelayEncodeWithTemporalLora": "LTX Prompt Relay Encode + Temporal LoRA",
+    "SpillImageBatchToDirectory": "Spill Image Batch To Directory",
+    "FrameCountPassthrough": "Frame Count Passthrough",
+    "AlignedAudioCutTransition": "Aligned Audio Cut Transition",
+    "AlignedOverlapCutTransition": "Aligned Overlap Cut Transition",
+    "LTXExtensionFrameLogic": "LTX Extension Frame Logic",
 }
 
 WEB_DIRECTORY = "./js"

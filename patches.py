@@ -1,6 +1,127 @@
+import math
 import types
 import torch
 import comfy.ldm.modules.attention
+
+
+_AUDIO_ENCODE_PATCHED = False
+_AUDIO_TRIM_PATCHED = False
+
+
+def _audio_vae_min_samples(vae):
+    first_stage_model = getattr(vae, "first_stage_model", None)
+    preprocessor = getattr(first_stage_model, "preprocessor", None)
+    n_fft = getattr(preprocessor, "n_fft", None)
+    if n_fft is not None:
+        return max(1, int(n_fft))
+    return 1024
+
+
+def _pad_audio_tail(waveform, minimum_samples):
+    sample_count = waveform.shape[-1]
+    if sample_count >= minimum_samples:
+        return waveform
+
+    pad = waveform.new_zeros(*waveform.shape[:-1], minimum_samples - sample_count)
+    return torch.cat((waveform, pad), dim=-1)
+
+
+def _silent_audio_like(waveform, sample_rate, sample_count=1):
+    channels = waveform.shape[1] if waveform.ndim >= 2 else 2
+    batch = waveform.shape[0] if waveform.ndim >= 1 else 1
+    silent = waveform.new_zeros((batch, channels, max(1, int(sample_count))))
+    return {"waveform": silent, "sample_rate": sample_rate}
+
+
+def _ltx_audio_target_sample_rate(vae):
+    first_stage_model = getattr(vae, "first_stage_model", None)
+    preprocessor = getattr(first_stage_model, "preprocessor", None)
+    target_sample_rate = getattr(preprocessor, "target_sample_rate", None)
+    if target_sample_rate is not None:
+        return int(target_sample_rate)
+    sample_rate = getattr(first_stage_model, "sample_rate", None)
+    if sample_rate is not None:
+        return int(sample_rate)
+    return None
+
+
+def apply_audio_encode_safety_patch():
+    global _AUDIO_ENCODE_PATCHED
+    if _AUDIO_ENCODE_PATCHED:
+        return
+
+    import torchaudio
+    from comfy_api.latest import IO
+    from comfy_extras.nodes_audio import VAEEncodeAudio
+
+    @classmethod
+    def _safe_execute(cls, vae, audio):
+        if audio is None:
+            raise ValueError("VAEEncodeAudio: input audio is None (source video may have no audio track).")
+
+        sample_rate = audio["sample_rate"]
+        first_stage_model = getattr(vae, "first_stage_model", None)
+        ltx_target_sample_rate = _ltx_audio_target_sample_rate(vae)
+        vae_sample_rate = ltx_target_sample_rate or getattr(vae, "audio_sample_rate", 44100)
+        minimum_target_samples = _audio_vae_min_samples(vae)
+        minimum_source_samples = max(1, math.ceil(minimum_target_samples * sample_rate / max(vae_sample_rate, 1)))
+        waveform = audio["waveform"].contiguous()
+        waveform = _pad_audio_tail(waveform, minimum_source_samples)
+
+        if ltx_target_sample_rate is None and vae_sample_rate != sample_rate:
+            waveform = torchaudio.functional.resample(waveform, sample_rate, vae_sample_rate)
+
+        waveform = _pad_audio_tail(waveform.contiguous(), minimum_target_samples)
+
+        if first_stage_model is not None and ltx_target_sample_rate is not None:
+            encoded = first_stage_model.encode(waveform, sample_rate=sample_rate)
+        else:
+            encoded = vae.encode(waveform.movedim(1, -1).contiguous())
+        return IO.NodeOutput({"samples": encoded})
+
+    VAEEncodeAudio.execute = _safe_execute
+    VAEEncodeAudio.encode = _safe_execute
+    _AUDIO_ENCODE_PATCHED = True
+
+
+def apply_audio_trim_safety_patch():
+    global _AUDIO_TRIM_PATCHED
+    if _AUDIO_TRIM_PATCHED:
+        return
+
+    from comfy_api.latest import IO
+    from comfy_extras.nodes_audio import TrimAudioDuration
+
+    @classmethod
+    def _safe_trim_execute(cls, audio, start_index, duration):
+        if audio is None:
+            return IO.NodeOutput(None)
+
+        waveform = audio["waveform"]
+        sample_rate = audio["sample_rate"]
+        audio_length = waveform.shape[-1]
+
+        if audio_length == 0:
+            return IO.NodeOutput(_silent_audio_like(waveform, sample_rate))
+
+        if start_index < 0:
+            start_frame = audio_length + int(round(start_index * sample_rate))
+        else:
+            start_frame = int(round(start_index * sample_rate))
+        start_frame = max(0, min(start_frame, audio_length))
+
+        duration_frames = int(round(duration * sample_rate))
+        end_frame = max(0, min(start_frame + duration_frames, audio_length))
+
+        if start_frame >= end_frame:
+            return IO.NodeOutput(_silent_audio_like(waveform, sample_rate))
+
+        trimmed = waveform[..., start_frame:end_frame].contiguous()
+        return IO.NodeOutput({"waveform": trimmed, "sample_rate": sample_rate})
+
+    TrimAudioDuration.execute = _safe_trim_execute
+    TrimAudioDuration.trim = _safe_trim_execute
+    _AUDIO_TRIM_PATCHED = True
 
 
 def _masked_attention(q, k, v, heads, mask, transformer_options={}, **kwargs):
