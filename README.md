@@ -82,10 +82,8 @@ The `v1.6` workflow is the release workflow to use when you want the smoother tr
 Workflow files:
 
 - `example_workflows/Yogurt_LTXDirector_extender_v1.6.app.json`
-- `example_workflows/Yogurt_LTXDirector_extender_v1.1.json`
-- `plain_graphs/Yogurt_LTXDirector_extender_v1.2.json`
 
-Use `example_workflows/Yogurt_LTXDirector_extender_v1.6.app.json` as the current tested template workflow. Files under `example_workflows/` are exposed through ComfyUI's workflow template system. The `plain_graphs/` copies have not been brought up to the `v1.6` transition wiring yet.
+Use `example_workflows/Yogurt_LTXDirector_extender_v1.6.app.json` as the current tested template workflow. Files under `example_workflows/` are exposed through ComfyUI's workflow template system.
 
 ![Yogurt LTXDirector Extender Workflow](images/Yogurt_LTXDirector_Extender_Workflow.png)
 
@@ -199,7 +197,7 @@ The fixes in this fork were aimed at LTX Director extension workflows with:
 ## Known Limitations
 
 - PromptRelay Temporal LoRA is present here as a separate standalone node, but it is still an untested integration path for LTX Director extension workflows.
-- The current tested template copy is `example_workflows/Yogurt_LTXDirector_extender_v1.6.app.json`. The `plain_graphs/` imports are still older copies and do not yet mirror the final `v1.6` transition wiring.
+- The current tested workflow release is `example_workflows/Yogurt_LTXDirector_extender_v1.6.app.json`.
 - Extended audio can still produce speech-like output with imperfect lexical accuracy on some prompts. The overlap timing fixes help alignment, but they do not guarantee perfect spoken word fidelity.
 
 ## Files To Review First
@@ -209,5 +207,4 @@ The fixes in this fork were aimed at LTX Director extension workflows with:
 - `prompt_relay.py`
 - `prompt_relay_lora.py`
 - `example_workflows/Yogurt_LTXDirector_extender_v1.6.app.json`
-- `plain_graphs/Yogurt_LTXDirector_extender_v1.2.json`
 - `README.md`
