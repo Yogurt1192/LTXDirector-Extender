@@ -20,7 +20,16 @@ function hideWidget(w) {
   w.hidden = true;
   if (!w.options) w.options = {};
   w.options.hidden = true;
-  w.computeSize = () => [0, 0];
+
+  // In ComfyUI's Vue Nodes rendering mode, widgets are DOM-driven and forcing a
+  // computeSize/draw collapse here fights Vue's own layout bookkeeping: the widget's
+  // textarea element stays mounted and grows to its natural content height, escaping
+  // the node bounds once the text wraps past a few lines. Only apply the collapse
+  // trick under classic LiteGraph canvas rendering; in Vue Nodes mode, hiding the
+  // element itself (below) is what actually keeps it out of the layout.
+  if (!window.LiteGraph || !window.LiteGraph.vueNodesMode) {
+    w.computeSize = () => [0, 0];
+  }
   if (w.element) w.element.style.display = "none";
 }
 

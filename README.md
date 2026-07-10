@@ -77,6 +77,12 @@ Specific node updates used by the working path:
 
 The `v1.6` workflow is the release workflow to use when you want the smoother transition behavior that was validated during testing.
 
+### 5. LTX Director Extender timeline UI overflow fix (Vue Nodes / newer frontends)
+
+On recent ComfyUI frontend releases (Vue Nodes rendering, e.g. `comfyui-frontend-package` 1.45.x), the hidden helper widgets behind the timeline editor (`local_prompts`, `segment_lengths`, `timeline_data`, etc.) could reappear as raw, unstyled textareas once their auto-populated text grew past a few lines — overlapping the toolbar and blocking the `Add Text`/`+` buttons.
+
+This was caused by the node's widget-hiding helper forcing a `computeSize`/layout override that fights Vue Nodes' own DOM-driven layout instead of just relying on `display: none`. `js/ltx_director.js` now only applies that override under classic LiteGraph canvas rendering and defers to `display: none` under Vue Nodes, matching the current upstream `WhatDreamsCost-ComfyUI` behavior.
+
 ## Yogurt LTXDirector_Extender Workflow
 
 Workflow files:
