@@ -20,7 +20,16 @@ function hideWidget(w) {
   w.hidden = true;
   if (!w.options) w.options = {};
   w.options.hidden = true;
-  w.computeSize = () => [0, 0];
+
+  // In ComfyUI's Vue Nodes rendering mode, widgets are DOM-driven and forcing a
+  // computeSize/draw collapse here fights Vue's own layout bookkeeping: the widget's
+  // textarea element stays mounted and grows to its natural content height, escaping
+  // the node bounds once the text wraps past a few lines. Only apply the collapse
+  // trick under classic LiteGraph canvas rendering; in Vue Nodes mode, hiding the
+  // element itself (below) is what actually keeps it out of the layout.
+  if (!window.LiteGraph || !window.LiteGraph.vueNodesMode) {
+    w.computeSize = () => [0, 0];
+  }
   if (w.element) w.element.style.display = "none";
 }
 
@@ -28,7 +37,7 @@ function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
 // --- Modern Dark/Grey UI CSS (ComfyUI Match) ---
 const STYLES = `
-  .ltxext-wrapper {
+  .pr-wrapper {
     font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     display: flex;
     flex-direction: column;
@@ -38,12 +47,12 @@ const STYLES = `
     box-sizing: border-box;
     padding-bottom: 4px;
   }
-  .ltxext-wrapper.drag-active {
+  .pr-wrapper.drag-active {
     outline: 2px dashed #888;
     background: rgba(255, 255, 255, 0.05);
     border-radius: 6px;
   }
-  .ltxext-toolbar {
+  .pr-toolbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -51,12 +60,12 @@ const STYLES = `
     flex-wrap: wrap;
     gap: 6px;
   }
-  .ltxext-actions {
+  .pr-actions {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
   }
-  .ltxext-btn {
+  .pr-btn {
     background: #222;
     color: #e0e0e0;
     border: 1px solid #111;
@@ -70,16 +79,16 @@ const STYLES = `
     gap: 6px;
     transition: all 0.2s ease;
   }
-  .ltxext-btn:hover {
+  .pr-btn:hover {
     background: #333;
     border-color: #555;
   }
-  .ltxext-btn-danger:hover {
+  .pr-btn-danger:hover {
     background: #4a1515;
     border-color: #cc4444;
     color: #ffaaaa;
   }
-  .ltxext-canvas {
+  .pr-canvas {
     border-radius: 6px;
     border: 1px solid #111;
     background: #2a2a2a;
@@ -88,14 +97,14 @@ const STYLES = `
     outline: none;
     display: block; /* Ensure no inline baseline gaps */
   }
-  .ltxext-prop-container {
+  .pr-prop-container {
     display: flex;
     flex-direction: column;
     width: 100%;
     flex-grow: 1; /* Automatically scales to fill node height */
     min-height: 40px;
   }
-  .ltxext-prompt-area {
+  .pr-prompt-area {
     width: 100%;
     height: 100%;
     background: #222;
@@ -110,10 +119,10 @@ const STYLES = `
     outline: none;
     transition: border-color 0.2s ease;
   }
-  .ltxext-prompt-area:focus {
+  .pr-prompt-area:focus {
     border-color: #888;
   }
-  .ltxext-audio-info {
+  .pr-audio-info {
     width: 100%;
     height: 100%;
     background: #181818;
@@ -126,8 +135,8 @@ const STYLES = `
     box-sizing: border-box;
     display: none;
   }
-  .ltxext-audio-info span { color: #fff; font-weight: 500; }
-  .ltxext-controls-group {
+  .pr-audio-info span { color: #fff; font-weight: 500; }
+  .pr-controls-group {
     background: #1e1e1e;
     border: 1px solid #333;
     border-radius: 6px;
@@ -139,14 +148,14 @@ const STYLES = `
     box-sizing: border-box;
     width: 100%;
   }
-  .ltxext-strength-row {
+  .pr-strength-row {
     display: flex;
     align-items: center;
     gap: 12px;
     width: 100%;
     box-sizing: border-box;
   }
-  .ltxext-height-resizer {
+  .pr-height-resizer {
     height: 6px;
     background: #2a2a2a;
     cursor: ns-resize;
@@ -155,18 +164,18 @@ const STYLES = `
     transition: background 0.15s;
     border: 1px solid #1e1e1e;
   }
-  .ltxext-height-resizer:hover {
+  .pr-height-resizer:hover {
     background: #444;
     border-color: #555;
   }
-  .ltxext-strength-label {
+  .pr-strength-label {
     font-size: 11px;
     font-weight: 600;
     color: #fff;
     white-space: nowrap;
     margin-left: auto;
   }
-  .ltxext-strength-slider {
+  .pr-strength-slider {
     -webkit-appearance: none;
     appearance: none;
     width: 80px;
@@ -177,7 +186,7 @@ const STYLES = `
     cursor: pointer;
     border: 1px solid #222;
   }
-  .ltxext-strength-slider::-webkit-slider-thumb {
+  .pr-strength-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 12px;
@@ -186,11 +195,11 @@ const STYLES = `
     background: #aaa;
     cursor: pointer;
   }
-  .ltxext-strength-slider:disabled {
+  .pr-strength-slider:disabled {
     opacity: 0.3;
     cursor: not-allowed;
   }
-  .ltxext-strength-input {
+  .pr-strength-input {
     font-size: 12px;
     color: #fff;
     background: #222;
@@ -200,19 +209,19 @@ const STYLES = `
     text-align: center;
     padding: 3px;
   }
-  .ltxext-strength-input::-webkit-outer-spin-button,
-  .ltxext-strength-input::-webkit-inner-spin-button {
+  .pr-strength-input::-webkit-outer-spin-button,
+  .pr-strength-input::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0;
   }
-  .ltxext-strength-input[type=number] {
+  .pr-strength-input[type=number] {
     -moz-appearance: textfield;
   }
-  .ltxext-strength-input:disabled {
+  .pr-strength-input:disabled {
     opacity: 0.35;
     cursor: not-allowed;
   }
-  .ltxext-gap-menu {
+  .pr-gap-menu {
     position: fixed;
     background: #1e1e1e;
     border: 1px solid #444;
@@ -224,7 +233,7 @@ const STYLES = `
     z-index: 9999;
     box-shadow: 0 4px 16px rgba(0,0,0,0.6);
   }
-  .ltxext-gap-menu-btn {
+  .pr-gap-menu-btn {
     background: #2a2a2a;
     color: #e0e0e0;
     border: 1px solid #333;
@@ -240,11 +249,11 @@ const STYLES = `
     gap: 6px;
     transition: background 0.15s ease;
   }
-  .ltxext-gap-menu-btn:hover {
+  .pr-gap-menu-btn:hover {
     background: #3a3a3a;
     border-color: #666;
   }
-  .ltxext-player-controls {
+  .pr-player-controls {
     display: flex;
     justify-content: center;
     align-items: center;
@@ -253,7 +262,7 @@ const STYLES = `
     flex-wrap: wrap;
     width: 100%;
   }
-  .ltxext-icon-btn {
+  .pr-icon-btn {
     background: #2a2a2a;
     border: 1px solid #444;
     color: #eee;
@@ -265,20 +274,20 @@ const STYLES = `
     justify-content: center;
     transition: all 0.2s;
   }
-  .ltxext-icon-btn * {
+  .pr-icon-btn * {
     pointer-events: none;
   }
-  .ltxext-icon-btn:hover {
+  .pr-icon-btn:hover {
     color: #fff;
     background: #3a3a3a;
     border-color: #666;
   }
-  .ltxext-icon-btn.active {
+  .pr-icon-btn.active {
     color: #4fff8f;
     border-color: #4fff8f;
     background: #1a3a2a;
   }
-  .ltxext-seek-bar {
+  .pr-seek-bar {
     -webkit-appearance: none;
     appearance: none;
     height: 6px;
@@ -288,7 +297,7 @@ const STYLES = `
     cursor: pointer;
     border: 1px solid #222;
   }
-  .ltxext-seek-bar::-webkit-slider-thumb {
+  .pr-seek-bar::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 14px;
@@ -298,34 +307,34 @@ const STYLES = `
     cursor: pointer;
     border: 2px solid #222;
   }
-  .ltxext-timeline-viewport {
+  .pr-timeline-viewport {
     width: 100%;
     overflow-x: auto;
     overflow-y: hidden;
   }
-  .ltxext-timeline-viewport::-webkit-scrollbar {
+  .pr-timeline-viewport::-webkit-scrollbar {
     height: 10px;
   }
-  .ltxext-timeline-viewport::-webkit-scrollbar-track {
+  .pr-timeline-viewport::-webkit-scrollbar-track {
     background: #151515;
     border-radius: 5px;
   }
-  .ltxext-timeline-viewport::-webkit-scrollbar-thumb {
+  .pr-timeline-viewport::-webkit-scrollbar-thumb {
     background: #444
     border-radius: 5px;
     border: 1px solid #000;
   }
-  .ltxext-timeline-viewport::-webkit-scrollbar-thumb:hover {
+  .pr-timeline-viewport::-webkit-scrollbar-thumb:hover {
     background: #666
     border-color: #000;
   }
-  .ltxext-zoom-controls {
+  .pr-zoom-controls {
     display: flex;
     align-items: center;
     gap: 4px;
     margin-left: 12px;
   }
-  .ltxext-zoom-slider {
+  .pr-zoom-slider {
     width: 80px;
     -webkit-appearance: none;
     appearance: none;
@@ -335,7 +344,7 @@ const STYLES = `
     outline: none;
     cursor: pointer;
   }
-  .ltxext-zoom-slider::-webkit-slider-thumb {
+  .pr-zoom-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 12px;
@@ -344,23 +353,23 @@ const STYLES = `
     background: #aaa;
     cursor: pointer;
   }
-  .ltxext-right-group {
+  .pr-right-group {
     display: flex;
     align-items: center;
     gap: 12px;
   }
-  .ltxext-segment-bounds {
+  .pr-segment-bounds {
     font-size: 12px;
     color: #aaa;
     font-family: monospace;
   }
-  .ltxext-timecode {
+  .pr-timecode {
     font-size: 14px;
     font-weight: bold;
     color: #e0e0e0;
     font-family: monospace;
   }
-  .ltxext-settings-menu {
+  .pr-settings-menu {
     position: fixed;
     background: #1e1e1e;
     border: 1px solid #444;
@@ -373,7 +382,7 @@ const STYLES = `
     box-shadow: 0 4px 20px rgba(0,0,0,0.7);
     min-width: 220px;
   }
-  .ltxext-settings-title {
+  .pr-settings-title {
     font-size: 11px;
     font-weight: 600;
     color: #888;
@@ -383,19 +392,19 @@ const STYLES = `
     border-bottom: 1px solid #333;
     margin-bottom: 2px;
   }
-  .ltxext-settings-row {
+  .pr-settings-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
   }
-  .ltxext-settings-label {
+  .pr-settings-label {
     font-size: 12px;
     color: #bbb;
     flex: 1;
     white-space: nowrap;
   }
-  .ltxext-number-control {
+  .pr-number-control {
     display: flex;
     align-items: center;
     border: 1px solid #444;
@@ -403,7 +412,7 @@ const STYLES = `
     background: #2a2a2a;
     overflow: hidden;
   }
-  .ltxext-number-btn {
+  .pr-number-btn {
     background: #333;
     color: #aaa;
     border: none;
@@ -417,11 +426,11 @@ const STYLES = `
     transition: background 0.15s;
     user-select: none;
   }
-  .ltxext-number-btn:hover {
+  .pr-number-btn:hover {
     background: #444;
     color: #fff;
   }
-  .ltxext-settings-input {
+  .pr-settings-input {
     background: transparent;
     color: #e0e0e0;
     border: none;
@@ -434,12 +443,12 @@ const STYLES = `
     outline: none;
     -moz-appearance: textfield;
   }
-  .ltxext-settings-input::-webkit-outer-spin-button,
-  .ltxext-settings-input::-webkit-inner-spin-button {
+  .pr-settings-input::-webkit-outer-spin-button,
+  .pr-settings-input::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0;
   }
-  .ltxext-settings-select {
+  .pr-settings-select {
     background: #2a2a2a;
     color: #e0e0e0;
     border: 1px solid #444;
@@ -449,12 +458,12 @@ const STYLES = `
     width: 98px;
     cursor: pointer;
   }
-  .ltxext-settings-divider {
+  .pr-settings-divider {
     border: none;
     border-top: 1px solid #2a2a2a;
     margin: 2px 0;
   }
-  .ltxext-settings-toggle-btn {
+  .pr-settings-toggle-btn {
     width: 100%;
     background: #252525;
     color: #aaa;
@@ -466,12 +475,12 @@ const STYLES = `
     text-align: center;
     transition: all 0.15s;
   }
-  .ltxext-settings-toggle-btn:hover {
+  .pr-settings-toggle-btn:hover {
     background: #2e2e2e;
     color: #ccc;
     border-color: #555;
   }
-  .ltxext-settings-close-btn {
+  .pr-settings-close-btn {
     background: transparent;
     color: #888;
     border: none;
@@ -483,11 +492,11 @@ const STYLES = `
     border-radius: 4px;
     transition: all 0.15s;
   }
-  .ltxext-settings-close-btn:hover {
+  .pr-settings-close-btn:hover {
     color: #fff;
     background: rgba(255,255,255,0.1);
   }
-  .ltxext-segmented-control {
+  .pr-segmented-control {
     display: flex;
     background: #1e1e1e;
     border: 1px solid #333;
@@ -498,7 +507,7 @@ const STYLES = `
     align-items: center;
     box-sizing: border-box;
   }
-  .ltxext-segment {
+  .pr-segment {
     flex: 1;
     text-align: center;
     font-size: 10px;
@@ -509,11 +518,11 @@ const STYLES = `
     color: #888;
     transition: all 0.15s ease;
   }
-  .ltxext-segment.active {
+  .pr-segment.active {
     background: #333;
     color: #fff;
   }
-  .ltxext-segment:hover:not(.active) {
+  .pr-segment:hover:not(.active) {
     color: #ccc;
   }
 `;
@@ -802,7 +811,7 @@ class TimelineEditor {
 
   createDOM() {
     this.wrapper = document.createElement("div");
-    this.wrapper.className = "ltxext-wrapper";
+    this.wrapper.className = "pr-wrapper";
 
     this.wrapper.addEventListener("mouseenter", () => { this._isHovering = true; });
     this.wrapper.addEventListener("mouseleave", () => { this._isHovering = false; });
@@ -844,10 +853,10 @@ class TimelineEditor {
 
     // --- Toolbar ---
     const toolbar = document.createElement("div");
-    toolbar.className = "ltxext-toolbar";
+    toolbar.className = "pr-toolbar";
 
     const actionGroup = document.createElement("div");
-    actionGroup.className = "ltxext-actions";
+    actionGroup.className = "pr-actions";
 
     this.fileInput = document.createElement("input");
     this.fileInput.type = "file";
@@ -864,22 +873,22 @@ class TimelineEditor {
     this.audioFileInput.addEventListener("change", (e) => this.handleAudioUpload(e.target.files));
 
     const uploadBtn = document.createElement("button");
-    uploadBtn.className = "ltxext-btn";
+    uploadBtn.className = "pr-btn";
     uploadBtn.innerHTML = `${ICONS.upload} Add Image`;
     uploadBtn.addEventListener("click", () => this.fileInput.click());
 
     const uploadAudioBtn = document.createElement("button");
-    uploadAudioBtn.className = "ltxext-btn";
+    uploadAudioBtn.className = "pr-btn";
     uploadAudioBtn.innerHTML = `${ICONS.audio} Add Audio`;
     uploadAudioBtn.addEventListener("click", () => this.audioFileInput.click());
 
     const addTextBtn = document.createElement("button");
-    addTextBtn.className = "ltxext-btn";
+    addTextBtn.className = "pr-btn";
     addTextBtn.innerHTML = `${ICONS.text} Add Text`;
     addTextBtn.addEventListener("click", () => this.addTextSegmentFreeSpace());
 
     const deleteBtn = document.createElement("button");
-    deleteBtn.className = "ltxext-btn ltxext-btn-danger";
+    deleteBtn.className = "pr-btn pr-btn-danger";
     deleteBtn.innerHTML = `${ICONS.trash} Delete`;
     deleteBtn.addEventListener("click", () => this.deleteSelectedSegment());
 
@@ -892,18 +901,18 @@ class TimelineEditor {
     toolbar.appendChild(actionGroup);
 
     const rightGroup = document.createElement("div");
-    rightGroup.className = "ltxext-right-group";
+    rightGroup.className = "pr-right-group";
 
     this.segmentBoundsDisplay = document.createElement("div");
-    this.segmentBoundsDisplay.className = "ltxext-segment-bounds";
+    this.segmentBoundsDisplay.className = "pr-segment-bounds";
     this.segmentBoundsDisplay.textContent = "Start: - | End: -";
 
     this.timeCodeDisplay = document.createElement("div");
-    this.timeCodeDisplay.className = "ltxext-timecode";
+    this.timeCodeDisplay.className = "pr-timecode";
     this.timeCodeDisplay.textContent = this.formatTime(0);
 
     const settingsBtn = document.createElement("button");
-    settingsBtn.className = "ltxext-btn";
+    settingsBtn.className = "pr-btn";
     settingsBtn.style.padding = "6px";
     settingsBtn.style.justifyContent = "center";
     settingsBtn.style.width = "28px";
@@ -921,7 +930,7 @@ class TimelineEditor {
     });
 
     const toggleBtn = document.createElement("button");
-    toggleBtn.className = "ltxext-btn";
+    toggleBtn.className = "pr-btn";
     toggleBtn.style.padding = "6px 8px";
     toggleBtn.style.fontSize = "11px";
     toggleBtn.style.marginRight = "0px";
@@ -960,7 +969,7 @@ class TimelineEditor {
     }, 100);
 
     const helpBtn = document.createElement("button");
-    helpBtn.className = "ltxext-btn";
+    helpBtn.className = "pr-btn";
     helpBtn.style.padding = "6px";
     helpBtn.style.justifyContent = "center";
     helpBtn.style.width = "28px";
@@ -986,7 +995,7 @@ class TimelineEditor {
 
     // --- Canvas & Viewport ---
     this.viewport = document.createElement("div");
-    this.viewport.className = "ltxext-timeline-viewport";
+    this.viewport.className = "pr-timeline-viewport";
 
     this.viewport.addEventListener("wheel", (e) => {
       if (e.ctrlKey || e.metaKey) {
@@ -1008,7 +1017,7 @@ class TimelineEditor {
     }, { passive: false, capture: true });
 
     this.canvas = document.createElement("canvas");
-    this.canvas.className = "ltxext-canvas";
+    this.canvas.className = "pr-canvas";
     this.ctx = this.canvas.getContext("2d");
     this.canvas.style.width = "100%";
 
@@ -1020,11 +1029,11 @@ class TimelineEditor {
 
     // --- Content Area Container ---
     const propContainer = document.createElement("div");
-    propContainer.className = "ltxext-prop-container";
+    propContainer.className = "pr-prop-container";
 
     // --- Text Area (Image/Text) ---
     this.promptInput = document.createElement("textarea");
-    this.promptInput.className = "ltxext-prompt-area";
+    this.promptInput.className = "pr-prompt-area";
     this.promptInput.placeholder = "Enter prompt for selected segment...";
     this.promptInput.addEventListener("input", () => {
       if (this.selectionType === "image" && this.timeline.segments[this.selectedIndex]) {
@@ -1035,7 +1044,7 @@ class TimelineEditor {
 
     // --- Audio Info Area ---
     this.audioInfoArea = document.createElement("div");
-    this.audioInfoArea.className = "ltxext-audio-info";
+    this.audioInfoArea.className = "pr-audio-info";
 
     propContainer.appendChild(this.promptInput);
     propContainer.appendChild(this.audioInfoArea);
@@ -1144,17 +1153,17 @@ class TimelineEditor {
 
     // --- Player Controls ---
     const playerControls = document.createElement("div");
-    playerControls.className = "ltxext-player-controls";
+    playerControls.className = "pr-player-controls";
 
     this.playBtn = document.createElement("button");
-    this.playBtn.className = "ltxext-icon-btn";
+    this.playBtn.className = "pr-icon-btn";
     this.playBtn.style.padding = "4px";
     this.playBtn.innerHTML = ICONS.play;
     this.playBtn.title = "Play/Pause Audio";
     this.playBtn.addEventListener("click", () => this.togglePlay());
 
     this.loopBtn = document.createElement("button");
-    this.loopBtn.className = "ltxext-icon-btn";
+    this.loopBtn.className = "pr-icon-btn";
     this.loopBtn.style.padding = "4px";
     this.loopBtn.innerHTML = ICONS.loop;
     this.loopBtn.title = "Toggle Loop";
@@ -1162,7 +1171,7 @@ class TimelineEditor {
 
     this.seekBar = document.createElement("input");
     this.seekBar.type = "range";
-    this.seekBar.className = "ltxext-seek-bar";
+    this.seekBar.className = "pr-seek-bar";
     this.seekBar.min = "0";
     this.seekBar.value = "0";
     this.seekBar.style.flex = "1"; // take up remaining space
@@ -1176,10 +1185,10 @@ class TimelineEditor {
 
     // --- Zoom Controls ---
     const zoomControls = document.createElement("div");
-    zoomControls.className = "ltxext-zoom-controls";
+    zoomControls.className = "pr-zoom-controls";
 
     const zoomOutBtn = document.createElement("button");
-    zoomOutBtn.className = "ltxext-icon-btn";
+    zoomOutBtn.className = "pr-icon-btn";
     zoomOutBtn.style.padding = "4px";
     zoomOutBtn.innerHTML = ICONS.minus;
     zoomOutBtn.title = "Zoom Out";
@@ -1191,7 +1200,7 @@ class TimelineEditor {
 
     this.zoomSlider = document.createElement("input");
     this.zoomSlider.type = "range";
-    this.zoomSlider.className = "ltxext-zoom-slider";
+    this.zoomSlider.className = "pr-zoom-slider";
     this.zoomSlider.min = "1";
     this.zoomSlider.max = "1"; // Updated dynamically via updateZoomSliderMax()
     this.zoomSlider.step = "0.1";
@@ -1216,7 +1225,7 @@ class TimelineEditor {
     });
 
     const zoomInBtn = document.createElement("button");
-    zoomInBtn.className = "ltxext-icon-btn";
+    zoomInBtn.className = "pr-icon-btn";
     zoomInBtn.style.padding = "4px";
     zoomInBtn.innerHTML = ICONS.plus;
     zoomInBtn.title = "Zoom In";
@@ -1227,7 +1236,7 @@ class TimelineEditor {
     });
 
     const zoomFitBtn = document.createElement("button");
-    zoomFitBtn.className = "ltxext-icon-btn";
+    zoomFitBtn.className = "pr-icon-btn";
     zoomFitBtn.style.padding = "4px";
     zoomFitBtn.style.marginLeft = "4px";
     zoomFitBtn.innerHTML = ICONS.fit;
@@ -1257,15 +1266,15 @@ class TimelineEditor {
 
     // --- Guide Strength Slider ---
     this.strengthRow = document.createElement("div");
-    this.strengthRow.className = "ltxext-strength-row";
+    this.strengthRow.className = "pr-strength-row";
 
     const strengthLabel = document.createElement("span");
-    strengthLabel.className = "ltxext-strength-label";
+    strengthLabel.className = "pr-strength-label";
     strengthLabel.textContent = "Guide Strength:";
 
     this.strengthValue = document.createElement("input");
     this.strengthValue.type = "text";
-    this.strengthValue.className = "ltxext-strength-input";
+    this.strengthValue.className = "pr-strength-input";
     this.strengthValue.value = "1.00";
     this.strengthValue.disabled = true;
     this.strengthValue.style.cursor = "ew-resize";
@@ -1348,7 +1357,7 @@ class TimelineEditor {
     this.wrapper.appendChild(this.viewport);
 
     const controlsGroup = document.createElement("div");
-    controlsGroup.className = "ltxext-controls-group";
+    controlsGroup.className = "pr-controls-group";
     controlsGroup.appendChild(this.strengthRow);
     controlsGroup.appendChild(playerControls);
     this.wrapper.appendChild(controlsGroup);
@@ -2957,7 +2966,7 @@ class TimelineEditor {
   showContextMenu(clientX, clientY, seg, trackType) {
     this.dismissContextMenu();
     const menu = document.createElement("div");
-    menu.className = "ltxext-gap-menu";
+    menu.className = "pr-gap-menu";
     menu.style.left = `${clientX + 6}px`;
     menu.style.top = `${clientY - 10}px`;
 
@@ -2965,7 +2974,7 @@ class TimelineEditor {
 
     if (isImage) {
       const copyBtn = document.createElement("button");
-      copyBtn.className = "ltxext-gap-menu-btn";
+      copyBtn.className = "pr-gap-menu-btn";
       copyBtn.innerHTML = `Copy Image`;
       copyBtn.onclick = async () => {
         try {
@@ -2980,7 +2989,7 @@ class TimelineEditor {
       menu.appendChild(copyBtn);
 
       const saveBtn = document.createElement("button");
-      saveBtn.className = "ltxext-gap-menu-btn";
+      saveBtn.className = "pr-gap-menu-btn";
       saveBtn.innerHTML = `Save Image`;
       saveBtn.onclick = () => {
         const a = document.createElement("a");
@@ -2992,7 +3001,7 @@ class TimelineEditor {
       menu.appendChild(saveBtn);
 
       const openBtn = document.createElement("button");
-      openBtn.className = "ltxext-gap-menu-btn";
+      openBtn.className = "pr-gap-menu-btn";
       openBtn.innerHTML = `Open Image in New Tab`;
       openBtn.onclick = () => {
         const win = window.open();
@@ -3007,7 +3016,7 @@ class TimelineEditor {
 
     if (trackType !== "audio") {
       const copyPromptBtn = document.createElement("button");
-      copyPromptBtn.className = "ltxext-gap-menu-btn";
+      copyPromptBtn.className = "pr-gap-menu-btn";
       copyPromptBtn.innerHTML = `Copy Prompt`;
       copyPromptBtn.onclick = async () => {
         try {
@@ -3021,7 +3030,7 @@ class TimelineEditor {
     }
 
     const copySegBtn = document.createElement("button");
-    copySegBtn.className = "ltxext-gap-menu-btn";
+    copySegBtn.className = "pr-gap-menu-btn";
     copySegBtn.innerHTML = `Copy Segment`;
     copySegBtn.onclick = () => {
       this._copiedSegment = { ...seg, id: Date.now().toString() + Math.random().toString(36).substr(2, 5) };
@@ -3033,7 +3042,7 @@ class TimelineEditor {
     const currentTrack = trackType === "audio" ? "audio" : "image";
     if (this._copiedSegment && this._copiedSegmentTrack === currentTrack) {
       const pasteReplaceBtn = document.createElement("button");
-      pasteReplaceBtn.className = "ltxext-gap-menu-btn";
+      pasteReplaceBtn.className = "pr-gap-menu-btn";
       pasteReplaceBtn.innerHTML = `Paste & Replace`;
       pasteReplaceBtn.onclick = () => {
         const newSeg = {
@@ -3052,7 +3061,7 @@ class TimelineEditor {
     }
 
     const delBtn = document.createElement("button");
-    delBtn.className = "ltxext-gap-menu-btn";
+    delBtn.className = "pr-gap-menu-btn";
     delBtn.innerHTML = `Delete`;
     delBtn.style.color = "#ff4444";
     delBtn.onclick = () => {
@@ -3076,7 +3085,7 @@ class TimelineEditor {
   showGapContextMenu(clientX, clientY, gap) {
     this.dismissContextMenu();
     const menu = document.createElement("div");
-    menu.className = "ltxext-gap-menu";
+    menu.className = "pr-gap-menu";
     menu.style.left = `${clientX + 6}px`;
     menu.style.top = `${clientY - 10}px`;
 
@@ -3084,7 +3093,7 @@ class TimelineEditor {
 
     if (this._copiedSegment && this._copiedSegmentTrack === currentTrack) {
       const pasteBtn = document.createElement("button");
-      pasteBtn.className = "ltxext-gap-menu-btn";
+      pasteBtn.className = "pr-gap-menu-btn";
       pasteBtn.innerHTML = `Paste Segment`;
       pasteBtn.onclick = () => {
         const startFrame = Math.round(gap.clickedFrame !== undefined ? gap.clickedFrame : gap.frameStart);
@@ -3107,7 +3116,7 @@ class TimelineEditor {
 
     if (currentTrack === "image") {
       const textBtn = document.createElement("button");
-      textBtn.className = "ltxext-gap-menu-btn";
+      textBtn.className = "pr-gap-menu-btn";
       textBtn.innerHTML = `${ICONS.text} Text Segment`;
       textBtn.onclick = () => {
         this.addSegmentInGap(gap.frameStart, gap.frameEnd, "text");
@@ -3116,7 +3125,7 @@ class TimelineEditor {
       menu.appendChild(textBtn);
 
       const imgBtn = document.createElement("button");
-      imgBtn.className = "ltxext-gap-menu-btn";
+      imgBtn.className = "pr-gap-menu-btn";
       imgBtn.innerHTML = `${ICONS.upload} Image Segment`;
       imgBtn.onclick = () => {
         this.dismissContextMenu();
@@ -3149,12 +3158,12 @@ class TimelineEditor {
   showGapMenu(clientX, clientY, gap) {
     this.dismissGapMenu();
     const menu = document.createElement("div");
-    menu.className = "ltxext-gap-menu";
+    menu.className = "pr-gap-menu";
     menu.style.left = `${clientX + 6}px`;
     menu.style.top = `${clientY - 10}px`;
 
     const textBtn = document.createElement("button");
-    textBtn.className = "ltxext-gap-menu-btn";
+    textBtn.className = "pr-gap-menu-btn";
     textBtn.innerHTML = `${ICONS.text} Text Segment`;
     textBtn.addEventListener("click", () => {
       this.addSegmentInGap(gap.frameStart, gap.frameEnd, "text");
@@ -3162,7 +3171,7 @@ class TimelineEditor {
     });
 
     const imgBtn = document.createElement("button");
-    imgBtn.className = "ltxext-gap-menu-btn";
+    imgBtn.className = "pr-gap-menu-btn";
     imgBtn.innerHTML = `${ICONS.upload} Image Segment`;
     imgBtn.addEventListener("click", () => {
       this.dismissGapMenu();
@@ -3182,7 +3191,7 @@ class TimelineEditor {
     const currentTrack = gap.track === "audio" ? "audio" : "image";
     if (this._copiedSegment && this._copiedSegmentTrack === currentTrack) {
       const pasteBtn = document.createElement("button");
-      pasteBtn.className = "ltxext-gap-menu-btn";
+      pasteBtn.className = "pr-gap-menu-btn";
       pasteBtn.innerHTML = `Paste Segment`;
       pasteBtn.onclick = () => {
         const gapLength = gap.frameEnd - gap.frameStart;
@@ -3292,9 +3301,9 @@ class TimelineEditor {
 
   _makeSettingRow(label, inputEl) {
     const row = document.createElement("div");
-    row.className = "ltxext-settings-row";
+    row.className = "pr-settings-row";
     const lbl = document.createElement("span");
-    lbl.className = "ltxext-settings-label";
+    lbl.className = "pr-settings-label";
     lbl.textContent = label;
     row.appendChild(lbl);
     row.appendChild(inputEl);
@@ -3304,11 +3313,11 @@ class TimelineEditor {
   showSettingsMenu(anchorEl) {
     this.dismissSettingsMenu();
     const menu = document.createElement("div");
-    menu.className = "ltxext-settings-menu";
+    menu.className = "pr-settings-menu";
 
     // Title & Close Button Container
     const titleContainer = document.createElement("div");
-    titleContainer.className = "ltxext-settings-title";
+    titleContainer.className = "pr-settings-title";
     titleContainer.style.display = "flex";
     titleContainer.style.justifyContent = "space-between";
     titleContainer.style.alignItems = "center";
@@ -3318,7 +3327,7 @@ class TimelineEditor {
     titleContainer.appendChild(titleText);
 
     const closeBtn = document.createElement("button");
-    closeBtn.className = "ltxext-settings-close-btn";
+    closeBtn.className = "pr-settings-close-btn";
     closeBtn.innerHTML = ICONS.close;
     closeBtn.title = "Close Settings";
     closeBtn.addEventListener("click", () => this.dismissSettingsMenu());
@@ -3339,14 +3348,14 @@ class TimelineEditor {
     const dmWidget = this.node.widgets?.find(w => w.name === "display_mode");
     if (dmWidget) {
       const ctrl = document.createElement("div");
-      ctrl.className = "ltxext-segmented-control";
+      ctrl.className = "pr-segmented-control";
 
       const framesSeg = document.createElement("div");
-      framesSeg.className = "ltxext-segment";
+      framesSeg.className = "pr-segment";
       framesSeg.textContent = "Frames";
 
       const secondsSeg = document.createElement("div");
-      secondsSeg.className = "ltxext-segment";
+      secondsSeg.className = "pr-segment";
       secondsSeg.textContent = "Seconds";
 
       const updateActive = (val) => {
@@ -3380,28 +3389,28 @@ class TimelineEditor {
     }
 
     const divider1 = document.createElement("hr");
-    divider1.className = "ltxext-settings-divider";
+    divider1.className = "pr-settings-divider";
     menu.appendChild(divider1);
 
     // Helper to create scrubbable number control with horizontal buttons
     const createScrubbableNumberControl = (w, step, min, max, isFloat = false) => {
       const container = document.createElement("div");
-      container.className = "ltxext-number-control";
+      container.className = "pr-number-control";
 
       const decBtn = document.createElement("button");
-      decBtn.className = "ltxext-number-btn";
+      decBtn.className = "pr-number-btn";
       decBtn.textContent = "-";
 
       const inp = document.createElement("input");
       inp.type = "number";
-      inp.className = "ltxext-settings-input";
+      inp.className = "pr-settings-input";
       inp.value = w.value;
       inp.step = step.toString();
       inp.min = min.toString();
       inp.max = max.toString();
 
       const incBtn = document.createElement("button");
-      incBtn.className = "ltxext-number-btn";
+      incBtn.className = "pr-number-btn";
       incBtn.textContent = "+";
 
       decBtn.addEventListener("click", () => {
@@ -3538,7 +3547,7 @@ class TimelineEditor {
 
     // --- Show/Hide on Node Toggle ---
     const toggleBtn = document.createElement("button");
-    toggleBtn.className = "ltxext-settings-toggle-btn";
+    toggleBtn.className = "pr-settings-toggle-btn";
     const widgetsVisible = !!(this.node.widgets?.find(w => w.name === "display_mode" && !(w.options && w.options.hidden)));
     toggleBtn.textContent = widgetsVisible ? "Hide Widgets on Node" : "Show Widgets on Node";
     toggleBtn.addEventListener("click", () => {
