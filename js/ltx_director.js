@@ -518,9 +518,9 @@ const STYLES = `
   }
 `;
 
-if (!document.getElementById("prompt-relay-styles")) {
+if (!document.getElementById("ltxdirector-extender-styles")) {
   const styleEl = document.createElement("style");
-  styleEl.id = "prompt-relay-styles";
+  styleEl.id = "ltxdirector-extender-styles";
   styleEl.textContent = STYLES;
   document.head.appendChild(styleEl);
 }
