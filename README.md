@@ -77,6 +77,14 @@ Specific node updates used by the working path:
 
 The `v1.6` workflow is the release workflow to use when you want the smoother transition behavior that was validated during testing.
 
+### 5. LTX Director Extender timeline UI overflow fix (CSS collision with upstream WhatDreamsCost-ComfyUI)
+
+If `WhatDreamsCost-ComfyUI` is installed alongside this fork, the timeline editor's segment prompt box could render as raw, unstyled floating text — positioned near the top of the node, overlapping the toolbar and blocking the `Add Text`/`+` buttons once the prompt text grew past a few lines.
+
+Root cause: this fork's timeline editor CSS reused the same unscoped, unprefixed class names (`.pr-wrapper`, `.pr-prop-container`, `.pr-prompt-area`, etc.) as the upstream node pack it was forked from. Both packages inject global `<style>` tags, so whichever one's stylesheet loads later in the browser wins the cascade for those shared class names. Upstream's current (v2.0) CSS for `.pr-prompt-area` uses `position: absolute` inside its own `.pr-prompt-wrapper` positioning context — a wrapper this fork's DOM doesn't have — so when that rule applied to this fork's textarea instead of its own, it pinned itself near the top of the nearest positioned ancestor with a transparent background and no border, exactly matching the reported symptom.
+
+Fix: all of this fork's timeline editor CSS classes in `js/ltx_director.js` are now namespaced under `ltxext-` (e.g. `.ltxext-prompt-area`) so they can no longer collide with class names from the upstream node pack (or any other custom node) regardless of load order or future upstream changes.
+
 ## Yogurt LTXDirector_Extender Workflow
 
 Workflow files:
