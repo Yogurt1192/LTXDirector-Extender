@@ -2,6 +2,7 @@ import math
 import types
 import torch
 import comfy.ldm.modules.attention
+import comfy.model_management
 
 
 _AUDIO_ENCODE_PATCHED = False
@@ -74,7 +75,17 @@ def apply_audio_encode_safety_patch():
         waveform = _pad_audio_tail(waveform.contiguous(), minimum_target_samples)
 
         if first_stage_model is not None and ltx_target_sample_rate is not None:
-            encoded = first_stage_model.encode(waveform, sample_rate=sample_rate)
+            comfy.model_management.load_models_gpu(
+                [vae.patcher],
+                force_full_load=getattr(vae, "disable_offload", False),
+            )
+            with comfy.model_management.cuda_device_context(vae.device):
+                waveform = waveform.to(device=vae.device, dtype=vae.vae_dtype)
+                encoded = first_stage_model.encode(waveform, sample_rate=sample_rate)
+            encoded = encoded.to(
+                device=vae.output_device,
+                dtype=vae.vae_output_dtype(),
+            )
         else:
             encoded = vae.encode(waveform.movedim(1, -1).contiguous())
         return IO.NodeOutput({"samples": encoded})
